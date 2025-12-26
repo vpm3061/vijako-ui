@@ -23,7 +23,7 @@ export default function HomePage() {
     try {
       setLoading(true);
       
-      // 1. Fetch verified experts from database
+      // ✅ 1. SINGLE QUERY: Fetch verified experts from database
       const { data: expertsData } = await supabase
         .from('sellers')
         .select(`
@@ -32,20 +32,19 @@ export default function HomePage() {
           handle,
           profession,
           rating,
-          trust_score,
-          subscription_tier,
-          expert_type,
-          categories,
-          profile_image_url,
           is_verified,
           verification_status,
-          business_type
+          business_type,
+          subscription_tier,
+          categories,
+          is_online
         `)
+        .eq('verification_status', 'verified')
         .eq('is_active', true)
-        .order('trust_score', { ascending: false })
+        .order('rating', { ascending: false })
         .limit(12);
 
-      // 2. Fetch categories (only 8 core ones)
+      // ✅ 2. Fetch categories (only 8 core ones)
       const { data: categoriesData } = await supabase
         .from('categories')
         .select('*')
@@ -53,24 +52,35 @@ export default function HomePage() {
         .order('sort_order')
         .limit(8);
 
-      // 3. Fetch trending hashtags (from posts)
-      const { data: hashtagsData } = await supabase
-        .from('feed_posts')
-        .select('hashtags')
-        .not('hashtags', 'is', null)
-        .limit(10);
+      // ✅ 3. Fetch trending hashtags (from posts)
+      try {
+        const { data: hashtagsData } = await supabase
+          .from('feed_posts')
+          .select('hashtags')
+          .not('hashtags', 'is', null)
+          .limit(10);
 
-      // Process hashtags
-      const hashtags = new Set<string>();
-      hashtagsData?.forEach(post => {
-        if (post.hashtags && Array.isArray(post.hashtags)) {
-          post.hashtags.forEach((tag: string) => hashtags.add(tag));
+        // Process hashtags
+        const hashtags = new Set<string>();
+        hashtagsData?.forEach(post => {
+          if (post.hashtags && Array.isArray(post.hashtags)) {
+            post.hashtags.forEach((tag: string) => hashtags.add(tag));
+          }
+        });
+        
+        if (hashtags.size > 0) {
+          setTrendingHashtags(Array.from(hashtags).slice(0, 12));
+        } else {
+          // Fallback hashtags if no data
+          setTrendingHashtags(['#Hospital', '#LawFirm', '#CA', '#Gym', '#FilmProduction', '#ITCompany', '#Coaching', '#Startup', '#Consultant', '#Doctor', '#Lawyer', '#Designer']);
         }
-      });
+      } catch (hashtagError) {
+        console.log('Hashtags not available, using fallback');
+        setTrendingHashtags(['#Hospital', '#LawFirm', '#CA', '#Gym', '#FilmProduction', '#ITCompany', '#Coaching', '#Startup']);
+      }
 
       setExperts(expertsData || []);
       setCategories(categoriesData || []);
-      setTrendingHashtags(Array.from(hashtags).slice(0, 12));
     } catch (error) {
       console.error('Error loading home data:', error);
     } finally {
@@ -329,7 +339,7 @@ export default function HomePage() {
                           </div>
                           <div className="flex items-center gap-1">
                             <Shield className="w-3.5 h-3.5 text-blue-500" />
-                            <span className="font-medium">Trust: {expert.trust_score || 85}%</span>
+                            <span className="font-medium">Status: {expert.is_online ? '🟢 Online' : '⚪ Offline'}</span>
                           </div>
                           <div className="flex items-center gap-1">
                             <Clock className="w-3.5 h-3.5 text-gray-400" />
